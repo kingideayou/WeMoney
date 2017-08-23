@@ -71,22 +71,20 @@ public class AccessibilityServiceTest extends AccessibilityService {
             AccessibilityNodeInfo nameAccessibilityNodeInfo = nameAccessibilityNodeInfos.get(0);
 
             String chatContent = accessibilityNodeInfo.getText().toString();
-            String hongbaoChatName = nameAccessibilityNodeInfo.getText().toString();
+            String chatName = nameAccessibilityNodeInfo.getText().toString();
 
-            if (chatContent.contains(WECHAT_NOTIFICATION_TIP)) { // 目前这种机制会错过同一个人连续发送多个红包
-                if (!hongbaoChatName.equals(mHongBaoBean.getChatName())) {
-                    mHongBaoBean.setChatName(hongbaoChatName);
-                    mHongBaoBean.setChatContent(chatContent);
+            Log.e(TAG, nodeInfo.getClassName() + " 找到了 ByViewId : " + accessibilityNodeInfo.getText().toString());
 
-                    Log.e(TAG, nodeInfo.getClassName() + " 找到了 ByViewId : " + accessibilityNodeInfo.getText().toString());
-
+            if (chatContent.contains(":" + WECHAT_NOTIFICATION_TIP)) { //群聊
+                if (!mHongBaoBean.getChatContent().equals(chatContent)) {
+                    updateHongBaoBean(chatContent, chatName);
+                    toChatDetailPage(accessibilityNodeInfo);
+                }
+            } else if (chatContent.contains(WECHAT_NOTIFICATION_TIP)) { // 目前这种机制会错过同一个人连续发送多个红包
+                if (!chatName.equals(mHongBaoBean.getChatName())) {
+                    updateHongBaoBean(chatContent, chatName);
                     haveNewLuckyPackage = true;
-                    while (accessibilityNodeInfo != null && !accessibilityNodeInfo.isClickable()) {
-                        accessibilityNodeInfo = accessibilityNodeInfo.getParent();
-                    }
-                    if (accessibilityNodeInfo != null && accessibilityNodeInfo.isClickable()) {
-                        accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                    }
+                    toChatDetailPage(accessibilityNodeInfo);
                 }
             }
         }
@@ -116,6 +114,15 @@ public class AccessibilityServiceTest extends AccessibilityService {
 //            }
 //            nodeInfo = nodeInfo.getParent();
 //        }
+    }
+
+    private void toChatDetailPage(AccessibilityNodeInfo accessibilityNodeInfo) {
+        while (accessibilityNodeInfo != null && !accessibilityNodeInfo.isClickable()) {
+            accessibilityNodeInfo = accessibilityNodeInfo.getParent();
+        }
+        if (accessibilityNodeInfo != null && accessibilityNodeInfo.isClickable()) {
+            accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        }
     }
 
     private void getChildViewText(AccessibilityNodeInfo nodeInfo, int nodeChildCount) {
@@ -197,6 +204,11 @@ public class AccessibilityServiceTest extends AccessibilityService {
     @Override
     public void onInterrupt() {
 
+    }
+
+    private void updateHongBaoBean(String chatContent, String chatName) {
+        mHongBaoBean.setChatName(chatName);
+        mHongBaoBean.setChatContent(chatContent);
     }
 
     public HongBaoBean getHongBaoBean() {
