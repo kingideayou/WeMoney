@@ -6,6 +6,9 @@ import android.app.PendingIntent;
 import android.os.Parcelable;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
+import android.view.accessibility.AccessibilityNodeInfo;
+
+import java.util.List;
 
 /**
  * Created by NeXT on 17/8/8.
@@ -23,6 +26,12 @@ public class AccessibilityServiceTest extends AccessibilityService {
     private static final String ACTIVITY_CHAT_WITH = "En_5b8fbb1e"; //与他人聊天页，不常出现
     private static final String ACTIVITY_PACKAGE = "En_fba4b94f"; //打开红包页
 
+    private static final String VIEW_ID_CHAT_TIME = "com.tencent.mm:id/aih";
+    private static final String VIEW_ID_CHAT_CONTENT = "com.tencent.mm:id/aii";
+    private static final String VIEW_ID_CHAT_USER_NAME = "com.tencent.mm:id/aig";
+
+    private HongBaoBean mHongBaoBean = new HongBaoBean();
+
     private String currentActivityName;
 
     @Override
@@ -33,7 +42,121 @@ public class AccessibilityServiceTest extends AccessibilityService {
         if (handleNotification(accessibilityEvent)) {
             return;
         }
+        handleChatListLuckyMoney(accessibilityEvent);
 
+    }
+
+    boolean haveNewLuckyPackage = false;
+
+    private void handleChatListLuckyMoney(AccessibilityEvent accessibilityEvent) {
+        if (accessibilityEvent.getEventType() != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            return;
+        }
+        AccessibilityNodeInfo nodeInfo = accessibilityEvent.getSource();
+        if (nodeInfo == null) {
+            return;
+        }
+
+        AccessibilityNodeInfo parentNodeInfo = nodeInfo.getParent();
+        if (parentNodeInfo != null) {
+            parentNodeInfo = parentNodeInfo.getParent();
+        }
+        if (parentNodeInfo == null) {
+            return;
+        }
+        List<AccessibilityNodeInfo> accessibilityNodeInfos = parentNodeInfo.findAccessibilityNodeInfosByViewId(VIEW_ID_CHAT_CONTENT);
+        List<AccessibilityNodeInfo> nameAccessibilityNodeInfos = parentNodeInfo.findAccessibilityNodeInfosByViewId(VIEW_ID_CHAT_USER_NAME);
+        if (accessibilityNodeInfos != null && accessibilityNodeInfos.size() > 0) {
+            AccessibilityNodeInfo accessibilityNodeInfo = accessibilityNodeInfos.get(0);
+            AccessibilityNodeInfo nameAccessibilityNodeInfo = nameAccessibilityNodeInfos.get(0);
+
+            String chatContent = accessibilityNodeInfo.getText().toString();
+            String hongbaoChatName = nameAccessibilityNodeInfo.getText().toString();
+
+            if (chatContent.contains(WECHAT_NOTIFICATION_TIP)) { // 目前这种机制会错过同一个人连续发送多个红包
+                if (!hongbaoChatName.equals(mHongBaoBean.getChatName())) {
+                    mHongBaoBean.setChatName(hongbaoChatName);
+                    mHongBaoBean.setChatContent(chatContent);
+
+                    Log.e(TAG, nodeInfo.getClassName() + " 找到了 ByViewId : " + accessibilityNodeInfo.getText().toString());
+
+                    haveNewLuckyPackage = true;
+                    while (accessibilityNodeInfo != null && !accessibilityNodeInfo.isClickable()) {
+                        accessibilityNodeInfo = accessibilityNodeInfo.getParent();
+                    }
+                    if (accessibilityNodeInfo != null && accessibilityNodeInfo.isClickable()) {
+                        accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    }
+                }
+            }
+        }
+
+//        while (nodeInfo != null && !"android.widget.FrameLayout".equals(nodeInfo.getClassName())) {
+////            int nodeChildCount = nodeInfo.getChildCount();
+////            getChildViewText(nodeInfo, nodeChildCount);
+//
+//            List<AccessibilityNodeInfo> accessibilityNodeInfos = nodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/aii");
+//            if (accessibilityNodeInfos != null && accessibilityNodeInfos.size() > 0) {
+//                for (AccessibilityNodeInfo accessibilityNodeInfo : accessibilityNodeInfos) {
+//                    if (accessibilityNodeInfo.getText().toString().contains(WECHAT_NOTIFICATION_TIP)) {
+//                        Log.e(TAG, nodeInfo.getClassName() + " 找到了 ByViewId : " + accessibilityNodeInfo.getText().toString());
+//
+//                        haveNewLuckyPackage = true;
+//                        while (accessibilityNodeInfo != null && !accessibilityNodeInfo.isClickable()) {
+//                            accessibilityNodeInfo = accessibilityNodeInfo.getParent();
+//                        }
+//                        if (accessibilityNodeInfo != null && accessibilityNodeInfo.isClickable()) {
+////                                        accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+//                        }
+//                        break;
+//                    }
+//                }
+//            } else {
+//                Log.e(TAG, "没找到 ByViewId");
+//            }
+//            nodeInfo = nodeInfo.getParent();
+//        }
+    }
+
+    private void getChildViewText(AccessibilityNodeInfo nodeInfo, int nodeChildCount) {
+        if (nodeChildCount != 0) {
+            for (int i = 0; i < nodeChildCount; i++) {
+                AccessibilityNodeInfo childNodeInfo = nodeInfo.getChild(i);
+                if (childNodeInfo != null) {
+//                    if ("android.widget.ListView".equals(childNodeInfo.getClassName())) {
+
+                    List<AccessibilityNodeInfo> accessibilityNodeInfos1 = childNodeInfo.findAccessibilityNodeInfosByText(WECHAT_NOTIFICATION_TIP);
+                    if (accessibilityNodeInfos1 != null && accessibilityNodeInfos1.size() > 0) {
+                        for (AccessibilityNodeInfo accessibilityNodeInfo : accessibilityNodeInfos1) {
+                            Log.e(TAG, "ListView 找到了 ByText : " + accessibilityNodeInfo.getText().toString());
+                        }
+                    } else {
+                        Log.e(TAG, "ListView 没找到 ByText ");
+                    }
+
+                    List<AccessibilityNodeInfo> accessibilityNodeInfos = childNodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/aii");
+                    if (accessibilityNodeInfos != null && accessibilityNodeInfos.size() > 0) {
+                        for (AccessibilityNodeInfo accessibilityNodeInfo : accessibilityNodeInfos) {
+                            Log.e(TAG, "ListView 找到了 ByViewId : " + accessibilityNodeInfo.getText().toString());
+                            if (accessibilityNodeInfo.getText().toString().contains(WECHAT_NOTIFICATION_TIP)) {
+                                while (accessibilityNodeInfo != null && !accessibilityNodeInfo.isClickable()) {
+                                    accessibilityNodeInfo = accessibilityNodeInfo.getParent();
+                                }
+                                if (accessibilityNodeInfo != null && accessibilityNodeInfo.isClickable()) {
+//                                        accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                }
+                                break;
+                            }
+                        }
+                        break;
+                    } else {
+                        Log.e(TAG, "ListView 没找到 ByViewId");
+                    }
+//                    }
+                    getChildViewText(childNodeInfo, childNodeInfo.getChildCount());
+                }
+            }
+        }
     }
 
     /**
@@ -75,4 +198,13 @@ public class AccessibilityServiceTest extends AccessibilityService {
     public void onInterrupt() {
 
     }
+
+    public HongBaoBean getHongBaoBean() {
+        return mHongBaoBean;
+    }
+
+    public void setHongBaoBean(HongBaoBean hongBaoBean) {
+        mHongBaoBean = hongBaoBean;
+    }
+
 }
