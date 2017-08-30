@@ -6,4 +6,5 @@
                        android:accessibilityFeedbackType="feedbackAllMask"
                        android:notificationTimeout="10"
                        android:canRetrieveWindowContent="true"
+                       android:canPerformGestures="true"
                        android:settingsActivity="com.example.android.accessibility.ServiceSettingsActivity"/>

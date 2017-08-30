@@ -1,14 +1,19 @@
 package me.next.wemoney;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
 import android.app.Notification;
 import android.app.PendingIntent;
+import android.graphics.Path;
 import android.os.Parcelable;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import java.util.List;
+
+import static android.view.accessibility.AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED;
 
 /**
  * Created by NeXT on 17/8/8.
@@ -21,16 +26,19 @@ public class AccessibilityServiceTest extends AccessibilityService {
     private static final String TAG = AccessibilityService.class.getSimpleName();
 
     private static final String WECHAT_NOTIFICATION_TIP = "[微信红包]";//通知栏推送文案
+    private static final String WECHAT_LUCKY_MONEY_GET = "领取红包";//聊天页红包描述
 
     private static final String ACTIVITY_HOME = "LauncherUI";
     private static final String ACTIVITY_CHAT_WITH = "En_5b8fbb1e"; //与他人聊天页，不常出现
     private static final String ACTIVITY_PACKAGE = "En_fba4b94f"; //打开红包页
 
     private static final String VIEW_ID_CHAT_TIME = "com.tencent.mm:id/aih";
-    private static final String VIEW_ID_CHAT_CONTENT = "com.tencent.mm:id/aii";
-    private static final String VIEW_ID_CHAT_USER_NAME = "com.tencent.mm:id/aig";
+    private static final String VIEW_ID_CHAT_CONTENT = "com.tencent.mm:id/aje";
+    private static final String VIEW_ID_CHAT_USER_NAME = "com.tencent.mm:id/ajc";
+    private static final String VIEW_ID_CHAT_OPEN_BUTTON = "com.tencent.mm:id/bp6";
 
     private HongBaoBean mHongBaoBean = new HongBaoBean();
+    AccessibilityNodeInfo rootNodeInfo;
 
     private String currentActivityName;
 
@@ -42,19 +50,133 @@ public class AccessibilityServiceTest extends AccessibilityService {
         if (handleNotification(accessibilityEvent)) {
             return;
         }
-        handleChatListLuckyMoney(accessibilityEvent);
-
-    }
-
-    boolean haveNewLuckyPackage = false;
-
-    private void handleChatListLuckyMoney(AccessibilityEvent accessibilityEvent) {
-        if (accessibilityEvent.getEventType() != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+        if (handleChatListLuckyMoney(accessibilityEvent)) {
             return;
         }
+
+        handleChatDetailLuckyMoney(accessibilityEvent);
+        openLuckyPackage(accessibilityEvent);
+    }
+
+    /**
+     * 开红包
+     */
+    private void openLuckyPackage(final AccessibilityEvent accessibilityEvent) {
+        Log.e(TAG, "Event Class Name : " + accessibilityEvent.getClassName().toString());
+        Log.e(TAG, "Event Class Name currentActivityName : " + currentActivityName);
+        Log.e(TAG, "Event Class Name eventType : " + accessibilityEvent.getEventType());
+        if (accessibilityEvent.getEventType() != TYPE_WINDOW_STATE_CHANGED || !currentActivityName.contains(ACTIVITY_PACKAGE)) {
+            return;
+        }
+
+        AccessibilityNodeInfo openButtonNodeInfo = findOpenButton(accessibilityEvent.getSource());
+        DisplayMetrics metrics = getResources().getDisplayMetrics();
+        float dpi = metrics.density;
+        if (android.os.Build.VERSION.SDK_INT <= 23) {
+            if (openButtonNodeInfo == null) {
+                return;
+            }
+            openButtonNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        } else {
+            if (android.os.Build.VERSION.SDK_INT > 23) {
+                Path path = new Path();
+                if (640 == dpi) {
+                    path.moveTo(720, 1575);
+                } else {
+                    path.moveTo(540, 1060);
+                }
+                GestureDescription.Builder builder = new GestureDescription.Builder();
+                GestureDescription gestureDescription = builder.addStroke(new GestureDescription.StrokeDescription(path, 450, 50)).build();
+                dispatchGesture(gestureDescription, new GestureResultCallback() {
+                    @Override
+                    public void onCompleted(GestureDescription gestureDescription) {
+                        super.onCompleted(gestureDescription);
+                    }
+
+                    @Override
+                    public void onCancelled(GestureDescription gestureDescription) {
+                        super.onCancelled(gestureDescription);
+                    }
+                }, null);
+
+            }
+        }
+    }
+
+    /**
+     * 获取拆红包页按钮
+     * 该页面只有「開」按钮为 Button 类型
+     * @param rootNodeInfo ParentNodeInfo
+     * @return 「開」按钮的 NodeInfo
+     */
+    private AccessibilityNodeInfo findOpenButton(AccessibilityNodeInfo rootNodeInfo) {
+        if (rootNodeInfo == null) {
+            return null;
+        }
+
+        Log.e(TAG, "Event Class Name info : " + rootNodeInfo.toString());
+
+        List<AccessibilityNodeInfo> accessibilityNodeInfoList = rootNodeInfo.findAccessibilityNodeInfosByViewId(VIEW_ID_CHAT_OPEN_BUTTON);
+        if (accessibilityNodeInfoList != null && accessibilityNodeInfoList.size() > 0) {
+            return accessibilityNodeInfoList.get(0);
+        }
+
+        while (rootNodeInfo != null) {
+
+            if ("android.widget.Button".equals(rootNodeInfo.getClassName())) {
+                return rootNodeInfo;
+            }
+
+            int nodeChildCount = rootNodeInfo.getChildCount();
+            for (int i = 0; i < nodeChildCount; i++) {
+                AccessibilityNodeInfo childNodeInfo = rootNodeInfo.getChild(i);
+                if (childNodeInfo != null && "android.widget.Button".equals(childNodeInfo.getClassName())) {
+                    return childNodeInfo;
+                }
+            }
+            rootNodeInfo = rootNodeInfo.getParent();
+        }
+        return null;
+    }
+
+    /**
+     * 打开聊天列表中的红包
+     */
+    private void handleChatDetailLuckyMoney(AccessibilityEvent accessibilityEvent) {
+        rootNodeInfo = getRootInActiveWindow();
+        if (rootNodeInfo == null) {
+            return;
+        }
+        List<AccessibilityNodeInfo> accessibilityNodeInfos = rootNodeInfo.findAccessibilityNodeInfosByText(WECHAT_LUCKY_MONEY_GET);
+        if (accessibilityNodeInfos.isEmpty()) {
+            return;
+        }
+        AccessibilityNodeInfo nodeToClick = accessibilityNodeInfos.get(0);
+        if (nodeToClick == null) {
+            return;
+        }
+        CharSequence description = nodeToClick.getContentDescription();
+        CharSequence parentDescription = nodeToClick.getParent().getContentDescription();
+
+        Log.d(TAG, "nodeDesc : " + nodeToClick.toString() + " - " + nodeToClick.getParent().toString());
+        // 领取红包按钮没有点击事件，需要调用父控件的点击事件
+        if (nodeToClick.getParent() != null) {
+            nodeToClick.getParent().performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        }
+    }
+
+    /**
+     * 监听首页聊天列表，监听新红包
+     * @return 有红包？
+     */
+    private boolean handleChatListLuckyMoney(AccessibilityEvent accessibilityEvent) {
+        if (accessibilityEvent.getEventType() != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            return false;
+        }
+
         AccessibilityNodeInfo nodeInfo = accessibilityEvent.getSource();
         if (nodeInfo == null) {
-            return;
+            return false;
         }
 
         AccessibilityNodeInfo parentNodeInfo = nodeInfo.getParent();
@@ -62,13 +184,19 @@ public class AccessibilityServiceTest extends AccessibilityService {
             parentNodeInfo = parentNodeInfo.getParent();
         }
         if (parentNodeInfo == null) {
-            return;
+            return false;
         }
         List<AccessibilityNodeInfo> accessibilityNodeInfos = parentNodeInfo.findAccessibilityNodeInfosByViewId(VIEW_ID_CHAT_CONTENT);
+//        List<AccessibilityNodeInfo> accessibilityNodeInfos = parentNodeInfo.findAccessibilityNodeInfosByText(WECHAT_NOTIFICATION_TIP);
         List<AccessibilityNodeInfo> nameAccessibilityNodeInfos = parentNodeInfo.findAccessibilityNodeInfosByViewId(VIEW_ID_CHAT_USER_NAME);
+//        List<AccessibilityNodeInfo> nameAccessibilityNodeInfos = parentNodeInfo.findAccessibilityNodeInfosByText(WECHAT_NOTIFICATION_TIP);
         if (accessibilityNodeInfos != null && accessibilityNodeInfos.size() > 0) {
             AccessibilityNodeInfo accessibilityNodeInfo = accessibilityNodeInfos.get(0);
             AccessibilityNodeInfo nameAccessibilityNodeInfo = nameAccessibilityNodeInfos.get(0);
+
+            if (accessibilityNodeInfo == null) {
+                return false;
+            }
 
             String chatContent = accessibilityNodeInfo.getText().toString();
             String chatName = nameAccessibilityNodeInfo.getText().toString();
@@ -78,92 +206,29 @@ public class AccessibilityServiceTest extends AccessibilityService {
             if (chatContent.contains(":" + WECHAT_NOTIFICATION_TIP)) { //群聊
                 if (!mHongBaoBean.getChatContent().equals(chatContent)) {
                     updateHongBaoBean(chatContent, chatName);
-                    toChatDetailPage(accessibilityNodeInfo);
+                    return toChatDetailPage(accessibilityNodeInfo);
                 }
             } else if (chatContent.contains(WECHAT_NOTIFICATION_TIP)) { // 目前这种机制会错过同一个人连续发送多个红包
                 if (!chatName.equals(mHongBaoBean.getChatName())) {
                     updateHongBaoBean(chatContent, chatName);
-                    haveNewLuckyPackage = true;
-                    toChatDetailPage(accessibilityNodeInfo);
+                    return toChatDetailPage(accessibilityNodeInfo);
+                } else if (!chatContent.equals(mHongBaoBean.getChatContent())){
+                    updateHongBaoBean(chatContent, chatName);
+                    return toChatDetailPage(accessibilityNodeInfo);
                 }
             }
         }
-
-//        while (nodeInfo != null && !"android.widget.FrameLayout".equals(nodeInfo.getClassName())) {
-////            int nodeChildCount = nodeInfo.getChildCount();
-////            getChildViewText(nodeInfo, nodeChildCount);
-//
-//            List<AccessibilityNodeInfo> accessibilityNodeInfos = nodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/aii");
-//            if (accessibilityNodeInfos != null && accessibilityNodeInfos.size() > 0) {
-//                for (AccessibilityNodeInfo accessibilityNodeInfo : accessibilityNodeInfos) {
-//                    if (accessibilityNodeInfo.getText().toString().contains(WECHAT_NOTIFICATION_TIP)) {
-//                        Log.e(TAG, nodeInfo.getClassName() + " 找到了 ByViewId : " + accessibilityNodeInfo.getText().toString());
-//
-//                        haveNewLuckyPackage = true;
-//                        while (accessibilityNodeInfo != null && !accessibilityNodeInfo.isClickable()) {
-//                            accessibilityNodeInfo = accessibilityNodeInfo.getParent();
-//                        }
-//                        if (accessibilityNodeInfo != null && accessibilityNodeInfo.isClickable()) {
-////                                        accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-//                        }
-//                        break;
-//                    }
-//                }
-//            } else {
-//                Log.e(TAG, "没找到 ByViewId");
-//            }
-//            nodeInfo = nodeInfo.getParent();
-//        }
+        return false;
     }
 
-    private void toChatDetailPage(AccessibilityNodeInfo accessibilityNodeInfo) {
+    private boolean toChatDetailPage(AccessibilityNodeInfo accessibilityNodeInfo) {
         while (accessibilityNodeInfo != null && !accessibilityNodeInfo.isClickable()) {
             accessibilityNodeInfo = accessibilityNodeInfo.getParent();
         }
         if (accessibilityNodeInfo != null && accessibilityNodeInfo.isClickable()) {
             accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         }
-    }
-
-    private void getChildViewText(AccessibilityNodeInfo nodeInfo, int nodeChildCount) {
-        if (nodeChildCount != 0) {
-            for (int i = 0; i < nodeChildCount; i++) {
-                AccessibilityNodeInfo childNodeInfo = nodeInfo.getChild(i);
-                if (childNodeInfo != null) {
-//                    if ("android.widget.ListView".equals(childNodeInfo.getClassName())) {
-
-                    List<AccessibilityNodeInfo> accessibilityNodeInfos1 = childNodeInfo.findAccessibilityNodeInfosByText(WECHAT_NOTIFICATION_TIP);
-                    if (accessibilityNodeInfos1 != null && accessibilityNodeInfos1.size() > 0) {
-                        for (AccessibilityNodeInfo accessibilityNodeInfo : accessibilityNodeInfos1) {
-                            Log.e(TAG, "ListView 找到了 ByText : " + accessibilityNodeInfo.getText().toString());
-                        }
-                    } else {
-                        Log.e(TAG, "ListView 没找到 ByText ");
-                    }
-
-                    List<AccessibilityNodeInfo> accessibilityNodeInfos = childNodeInfo.findAccessibilityNodeInfosByViewId("com.tencent.mm:id/aii");
-                    if (accessibilityNodeInfos != null && accessibilityNodeInfos.size() > 0) {
-                        for (AccessibilityNodeInfo accessibilityNodeInfo : accessibilityNodeInfos) {
-                            Log.e(TAG, "ListView 找到了 ByViewId : " + accessibilityNodeInfo.getText().toString());
-                            if (accessibilityNodeInfo.getText().toString().contains(WECHAT_NOTIFICATION_TIP)) {
-                                while (accessibilityNodeInfo != null && !accessibilityNodeInfo.isClickable()) {
-                                    accessibilityNodeInfo = accessibilityNodeInfo.getParent();
-                                }
-                                if (accessibilityNodeInfo != null && accessibilityNodeInfo.isClickable()) {
-//                                        accessibilityNodeInfo.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                                }
-                                break;
-                            }
-                        }
-                        break;
-                    } else {
-                        Log.e(TAG, "ListView 没找到 ByViewId");
-                    }
-//                    }
-                    getChildViewText(childNodeInfo, childNodeInfo.getChildCount());
-                }
-            }
-        }
+        return true;
     }
 
     /**
@@ -194,7 +259,7 @@ public class AccessibilityServiceTest extends AccessibilityService {
     }
 
     private void getActivityName(AccessibilityEvent accessibilityEvent) {
-        if (accessibilityEvent.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        if (accessibilityEvent.getEventType() != TYPE_WINDOW_STATE_CHANGED) {
             return;
         }
         currentActivityName = accessibilityEvent.getClassName().toString();

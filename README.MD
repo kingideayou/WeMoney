@@ -1,6 +1,7 @@
+adb shell dumpsys activity top
+
 /Users/NeXT/Library/Android/sdk/tools/bin
 uiautomatorviewer
-
 
 com.tencent.mm:id/aii
 
@@ -12,7 +13,6 @@ com.tencent.mm:id/bnr
 TYPE_NOTIFICATION_STATE_CHANGED
 Represents the event showing a Notification.
 ```
-
 
 ```
 TYPE_WINDOW_CONTENT_CHANGED
